@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Status Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-indicator {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+        }
+        .status-online {
+            background-color: #25d366;
+        }
+        .status-offline {
+            background-color: #9ca3af;
+        }
+        .status-hidden {
+            background-color: #fbbf24;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container max-w-4xl mx-auto bg-white shadow-lg rounded-lg mt-8 p-6">
+        <header class="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center">
+            <h1 class="text-3xl font-bold text-gray-800 mb-4 sm:mb-0">WhatsApp Status Monitor</h1>
+            <div class="relative w-full sm:w-64">
+                <input id="searchInput" type="text" placeholder="Search contacts..." 
+                       class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent" 
+                       onkeyup="filterContacts()">
+            </div>
+        </header>
+        
+        <main>
+            <div id="contactsList" class="space-y-3">
+                {{range .Contacts}}
+                <div class="status-item flex items-center gap-x-4 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors duration-200" 
+                     data-jid="{{.JID}}" data-name="{{.Username}}" onclick="showContactHistoryPage('{{.JID}}')">
+                    <div class="status-indicator {{if eq .CurrentStatus "Online"}}status-online{{else if eq .CurrentStatus "Hidden"}}status-hidden{{else}}status-offline{{end}}"></div>
+                    <span class="text-lg text-blue-700 font-medium hover:text-blue-900 cursor-pointer flex-1">{{.Username}}</span>
+                    <span class="text-base font-semibold {{if eq .CurrentStatus "Online"}}text-green-600{{else if eq .CurrentStatus "Hidden"}}text-yellow-600{{else}}text-gray-600{{end}}">
+                        {{if eq .CurrentStatus "Online"}}Online{{else if eq .CurrentStatus "Hidden"}}Hidden{{else}}Offline{{end}}
+                    </span>
+                </div>
+                {{else}}
+                <div class="text-center py-8">
+                    <p class="text-gray-500 text-lg">No contacts found. Please ensure your WhatsApp is connected and try again.</p>
+                </div>
+                {{end}}
+            </div>
+        </main>
+    </div>
+
+    <!-- Contact History Modal -->
+    <div id="contactHistoryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-hidden">
+                <div class="flex items-center justify-between p-6 border-b">
+                    <h2 id="historyContactName" class="text-2xl font-bold text-gray-800"></h2>
+                    <button onclick="closeHistoryModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                <div class="p-6 overflow-y-auto max-h-64">
+                    <div id="historyLogDisplay" class="space-y-2"></div>
+                    <p id="noHistoryMessage" class="text-gray-500 text-center py-4 hidden">No history available for this contact.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function filterContacts() {
+            const filter = document.getElementById('searchInput').value.toLowerCase().trim();
+            const contactItems = document.querySelectorAll('.status-item');
+            let foundContacts = 0;
+            
+            contactItems.forEach(function(item) {
+                const name = item.getAttribute('data-name').toLowerCase();
+                if (name.includes(filter)) {
+                    item.style.display = '';
+                    foundContacts++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function showContactHistoryPage(jid) {
+            const contact = Array.from(document.querySelectorAll('.status-item')).find(item => item.getAttribute('data-jid') === jid);
+            const displayName = contact ? contact.getAttribute('data-name') : 'Unknown Contact';
+            document.getElementById('historyContactName').textContent = displayName;
+            
+            // Fetch history from API
+            fetch('/history?jid=' + encodeURIComponent(jid))
+                .then(response => response.json())
+                .then(data => {
+                    const historyLogDisplay = document.getElementById('historyLogDisplay');
+                    historyLogDisplay.innerHTML = '';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(function(log) {
+                            const div = document.createElement('div');
+                            div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
+                            div.innerHTML = `
+                                <span class="font-medium ${log.Status === 'Online' ? 'text-green-600' : 'text-gray-600'}">${log.Status}</span>
+                                <span class="text-sm text-gray-500">${new Date(log.Time).toLocaleString()}</span>
+                            `;
+                            historyLogDisplay.appendChild(div);
+                        });
+                        document.getElementById('noHistoryMessage').classList.add('hidden');
+                    } else {
+                        document.getElementById('noHistoryMessage').classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching history:', error);
+                    document.getElementById('noHistoryMessage').classList.remove('hidden');
+                });
+            
+            document.getElementById('contactHistoryModal').classList.remove('hidden');
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('contactHistoryModal').classList.add('hidden');
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(function() {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
+
